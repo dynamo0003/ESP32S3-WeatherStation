@@ -2,3 +2,4 @@
 /.vscode
 sdkconfig
 sdkconfig.old
+private_define.h
