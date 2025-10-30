@@ -3,3 +3,6 @@
 sdkconfig
 sdkconfig.old
 private_define.h
+.clangd
+/managed_components
+dependencies.lock
