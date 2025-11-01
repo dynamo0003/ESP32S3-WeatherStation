@@ -6,6 +6,9 @@
 
 static const char * TAG = "HTTP";
 
+cJSON *temp = NULL;
+cJSON *humidity = NULL;
+
 esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
     static char *output_buffer;  // Buffer to store response of http request
@@ -50,8 +53,8 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
                 if (root) {
                     cJSON *main = cJSON_GetObjectItem(root, "main");
                     if (main) {
-                        cJSON *temp = cJSON_GetObjectItem(main, "temp");
-                        cJSON *humidity = cJSON_GetObjectItem(main, "humidity");
+                        temp = cJSON_GetObjectItem(main, "temp");
+                        humidity = cJSON_GetObjectItem(main, "humidity");
                         if (cJSON_IsNumber(temp)) {
                             ESP_LOGI(TAG, "Temperature: %.2f C", temp->valuedouble);
                         }
@@ -107,4 +110,10 @@ void get_current_weather_data(void)
     }
 
     esp_http_client_cleanup(client);
+}
+
+void get_temp_humidity(double *ret_temperature, double *ret_humidity)
+{
+    *ret_temperature = temp->valuedouble;
+    *ret_humidity = humidity->valuedouble;
 }

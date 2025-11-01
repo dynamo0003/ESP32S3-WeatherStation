@@ -15,6 +15,8 @@
 #include "wifi.h"
 #include "http.h"
 #include "private_define.h"
+#include "aht20.h"
+#include <stdbool.h>
 
 #define MAX_HTTP_OUTPUT_BUFFER 2048
 
@@ -246,7 +248,7 @@ static esp_err_t app_lvgl_init(void)
         .disp = lvgl_disp,
         .handle = touch_handle,
     };
-    lvgl_touch_indev = lvgl_port_add_touch(&touch_cfg);
+    // lvgl_touch_indev = lvgl_port_add_touch(&touch_cfg);
 
     return ESP_OK;
 }
@@ -274,7 +276,6 @@ static void app_main_display(void)
     lv_obj_set_width(label, EXAMPLE_LCD_H_RES);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(label, LV_SYMBOL_BELL" Hello world Espressif and LVGL "LV_SYMBOL_BELL"\n "LV_SYMBOL_WARNING" For simplier initialization, use BSP "LV_SYMBOL_WARNING);
-
 }
 
 void app_main(void)
@@ -286,31 +287,58 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to connect to Wi-Fi network");
     }
 
-    wifi_ap_record_t ap_info;
-    ret = esp_wifi_sta_get_ap_info(&ap_info);
-    if (ret == ESP_ERR_WIFI_CONN) {
-        ESP_LOGE(TAG, "Wi-Fi station interface not initialized");
-    }
-    else if (ret == ESP_ERR_WIFI_NOT_CONNECT) {
-        ESP_LOGE(TAG, "Wi-Fi station is not connected");
-    } else {
-        ESP_LOGI(TAG, "Wifi Connected, calling openweathermap api");
-        get_current_weather_data();
-    }
-
+    // Backlight
     gpio_config_t io_conf = {
         .mode = GPIO_MODE_INPUT_OUTPUT,
         .pin_bit_mask = 1ULL << GPIO_NUM_2,
     };
     gpio_config(&io_conf);
     gpio_set_level(GPIO_NUM_2, 1);
-
+    
     ESP_ERROR_CHECK(app_lcd_init());
-    ESP_ERROR_CHECK(app_touch_init());
+    // ESP_ERROR_CHECK(app_touch_init());
     ESP_ERROR_CHECK(app_lvgl_init());
-
+    
     /* Show LVGL objects */
     lvgl_port_lock(0);
     app_main_display();
     lvgl_port_unlock();
+
+    aht20_dev_handle_t aht20 = i2c_sensor_ath20_init();
+    uint32_t temperature_raw;
+    float temperature;
+    uint32_t humidity_raw;
+    float humidity;
+
+    double outside_temp, outside_humidity;
+
+    wifi_ap_record_t ap_info;
+    uint32_t one_hour_counter = 0;
+
+    bool warning_wifi = false, warning_i2c = false;
+    while(1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        one_hour_counter++;
+
+        ret = aht20_read_temperature_humidity(aht20, &temperature_raw, &temperature, &humidity_raw, &humidity);
+        if(ret != ESP_OK) warning_i2c = true;
+        else warning_i2c = false;
+        // ESP_LOGI("AHT20 READ", "Temperature: %.2f C, Humidity: %.2f %%", temperature, humidity);
+
+        if(one_hour_counter >= 3600) {
+            ret = esp_wifi_sta_get_ap_info(&ap_info);
+            if (ret == ESP_OK) {
+                one_hour_counter = 0;
+                get_current_weather_data();
+
+                get_temp_humidity(&outside_temp, &outside_humidity);
+                // ESP_LOGI(TAG, "Outside Temperature: %.2f C, Humidity: %.2f %%", outside_temp, outside_humidity);
+            }
+            else {
+                ESP_LOGE(TAG, "Failed to get AP info: %s", esp_err_to_name(ret));
+                warning_wifi = true; // Set warning flag to display on wifi error
+                one_hour_counter = 3540; // Retry in 1 minute
+            }
+        }
+    }
 }
