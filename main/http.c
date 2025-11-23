@@ -6,8 +6,8 @@
 
 static const char * TAG = "HTTP";
 
-cJSON *temp = NULL;
-cJSON *humidity = NULL;
+static double s_temp, s_hum = 0;
+static int s_id = 1;
 
 esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
@@ -51,18 +51,40 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
                 // Response is accumulated in output_buffer. Now parse it.
                 cJSON *root = cJSON_Parse(output_buffer);
                 if (root) {
+                    cJSON *weather = cJSON_GetObjectItem(root, "weather");
                     cJSON *main = cJSON_GetObjectItem(root, "main");
+
+                    if (cJSON_IsArray(weather)) {
+                        cJSON *w0 = cJSON_GetArrayItem(weather, 0);
+                        if (w0) {
+                            cJSON *id = cJSON_GetObjectItem(w0, "id");
+                            if (cJSON_IsNumber(id)) {
+                                s_id = id->valueint;
+                                ESP_LOGI(TAG, "Weather Condition ID: %d", s_id);
+                            } else {
+                                ESP_LOGW(TAG, "weather[0].id missing or not number");
+                            }
+                        } else {
+                            ESP_LOGW(TAG, "weather array empty");
+                        }
+                    } else {
+                        ESP_LOGW(TAG, "'weather' not an array");
+                    }
+
                     if (main) {
-                        temp = cJSON_GetObjectItem(main, "temp");
-                        humidity = cJSON_GetObjectItem(main, "humidity");
+                        cJSON *temp = cJSON_GetObjectItem(main, "temp");
+                        cJSON *humidity = cJSON_GetObjectItem(main, "humidity");
                         if (cJSON_IsNumber(temp)) {
+                            s_temp = temp->valuedouble;
                             ESP_LOGI(TAG, "Temperature: %.2f C", temp->valuedouble);
                         }
                         if (cJSON_IsNumber(humidity)) {
+                            s_hum = humidity->valuedouble;
                             ESP_LOGI(TAG, "Humidity: %.2f %%", humidity->valuedouble);
                         }
                     }
                     cJSON_Delete(root);
+                    
                 } else {
                     ESP_LOGE(TAG, "Failed to parse JSON");
                 }
@@ -114,6 +136,36 @@ void get_current_weather_data(void)
 
 void get_temp_humidity(double *ret_temperature, double *ret_humidity)
 {
-    *ret_temperature = temp->valuedouble;
-    *ret_humidity = humidity->valuedouble;
+    *ret_temperature = s_temp;
+    *ret_humidity = s_hum;
+}
+
+int get_weather_condition()
+{
+    int id = s_id;
+    int ret;
+
+    if(id == 800) { // Clear
+        ret = 1;
+    }
+    else if(id == 801) { // Partly cloudy
+        ret = 2;
+    }
+    else if(id >= 802 && id <= 804) { // Cloudy
+        ret = 3;
+    }
+    else if((id >= 300 && id <= 321) || (id >= 500 && id <= 531)) { // Rain
+        ret = 4;
+    }
+    else if(id >= 600 && id <= 622) { // Snow
+        ret = 5;
+    }
+    else if(id >= 200 && id <= 232) { // Thunderstorm
+        ret = 6;
+    }
+    else { // Unknown - dont change current condition
+        ret = 0;
+    }
+
+    return ret;
 }

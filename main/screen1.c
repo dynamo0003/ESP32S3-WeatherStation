@@ -8,10 +8,21 @@ static lv_obj_t * bg_image;
 static lv_timer_t * update_timer;
 
 LV_IMAGE_DECLARE(img_clear_day);
-LV_IMAGE_DECLARE(icon_sun);
+LV_IMAGE_DECLARE(img_cloudy_day);
+LV_IMAGE_DECLARE(img_partlycloudy_day);
+LV_IMAGE_DECLARE(img_rain_day);
+LV_IMAGE_DECLARE(img_snowy_day);
+LV_IMAGE_DECLARE(img_storm_day);
+
 LV_IMAGE_DECLARE(icon_clock);
 LV_IMAGE_DECLARE(icon_house);
 LV_IMAGE_DECLARE(icon_outside);
+LV_IMAGE_DECLARE(icon_sun);
+LV_IMAGE_DECLARE(icon_cloudy);
+LV_IMAGE_DECLARE(icon_partlycloudy);
+LV_IMAGE_DECLARE(icon_rain);
+LV_IMAGE_DECLARE(icon_snowy);
+LV_IMAGE_DECLARE(icon_storm);
 
 LV_FONT_DECLARE(inria_sans_14);
 LV_FONT_DECLARE(inria_sans_20);
@@ -36,7 +47,7 @@ lv_obj_t * screen1_create(lv_obj_t * parent) {
 
     // bg image
     bg_image = lv_img_create(screen_container);
-    lv_img_set_src(bg_image, &img_clear_day);
+    lv_img_set_src(bg_image, &img_cloudy_day);
     lv_obj_set_size(bg_image, LCD_WIDTH, LCD_HEIGHT);
 
     // ---------------------------------------------------------------------------

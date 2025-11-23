@@ -324,6 +324,7 @@ void app_main(void)
 
     wifi_ap_record_t ap_info;
     double outside_temp, outside_humidity;
+    int weather_condition = 6;    // 1- clear, 2- partly cloudy, 3-cloudy, 4- rain, 5- snow, 6- storm
 
     uint32_t one_hour_counter = 3600, one_day_counter = 0;
     bool warning_wifi = false, warning_i2c = false;
@@ -358,7 +359,9 @@ void app_main(void)
                 get_temp_humidity(&outside_temp, &outside_humidity);
                 ESP_LOGI(TAG, "Outside Temperature: %.2f C, Humidity: %.2f %%", outside_temp, outside_humidity);
 
-                // TODO: get current weather (sunny/rain/snow etc.)
+                int temp_id = get_weather_condition();
+                if(temp_id != 0) weather_condition = temp_id;
+                ESP_LOGW(TAG, "Weather Condition ID: %d", weather_condition);
             }
             else {
                 ESP_LOGE(TAG, "Failed to get AP info: %s", esp_err_to_name(ret));
