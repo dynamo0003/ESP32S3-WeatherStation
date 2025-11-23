@@ -16,9 +16,12 @@
 #include "http.h"
 #include "private_define.h"
 #include "aht20.h"
+#include "screen_manager.h"
 #include <stdbool.h>
 
 #define MAX_HTTP_OUTPUT_BUFFER 2048
+
+#define ENABLE_LV_LOG   (0)
 
 static const char * TAG = "main";
 
@@ -42,6 +45,7 @@ static const char * TAG = "main";
 #define EXAMPLE_LCD_GPIO_DE        (GPIO_NUM_40)
 #define EXAMPLE_LCD_GPIO_PCLK      (GPIO_NUM_42)
 #define EXAMPLE_LCD_GPIO_DISP      (GPIO_NUM_NC)
+
 #define EXAMPLE_LCD_GPIO_DATA0     (GPIO_NUM_45)
 #define EXAMPLE_LCD_GPIO_DATA1     (GPIO_NUM_48)
 #define EXAMPLE_LCD_GPIO_DATA2     (GPIO_NUM_47)
@@ -110,22 +114,24 @@ static esp_err_t app_lcd_init(void)
         .hsync_gpio_num = EXAMPLE_LCD_GPIO_HSYNC,
         .disp_gpio_num = EXAMPLE_LCD_GPIO_DISP,
         .data_gpio_nums = {
-            EXAMPLE_LCD_GPIO_DATA0,
-            EXAMPLE_LCD_GPIO_DATA1,
-            EXAMPLE_LCD_GPIO_DATA2,
-            EXAMPLE_LCD_GPIO_DATA3,
-            EXAMPLE_LCD_GPIO_DATA4,
+            EXAMPLE_LCD_GPIO_DATA11,
+            EXAMPLE_LCD_GPIO_DATA12,
+            EXAMPLE_LCD_GPIO_DATA13,
+            EXAMPLE_LCD_GPIO_DATA14,
+            EXAMPLE_LCD_GPIO_DATA15,
+            
             EXAMPLE_LCD_GPIO_DATA5,
             EXAMPLE_LCD_GPIO_DATA6,
             EXAMPLE_LCD_GPIO_DATA7,
             EXAMPLE_LCD_GPIO_DATA8,
             EXAMPLE_LCD_GPIO_DATA9,
             EXAMPLE_LCD_GPIO_DATA10,
-            EXAMPLE_LCD_GPIO_DATA11,
-            EXAMPLE_LCD_GPIO_DATA12,
-            EXAMPLE_LCD_GPIO_DATA13,
-            EXAMPLE_LCD_GPIO_DATA14,
-            EXAMPLE_LCD_GPIO_DATA15,
+            
+            EXAMPLE_LCD_GPIO_DATA0,
+            EXAMPLE_LCD_GPIO_DATA1,
+            EXAMPLE_LCD_GPIO_DATA2,
+            EXAMPLE_LCD_GPIO_DATA3,
+            EXAMPLE_LCD_GPIO_DATA4,
         },
         .timings = EXAMPLE_LCD_PANEL_35HZ_RGB_TIMING(),
         .flags.fb_in_psram = 1,
@@ -278,11 +284,18 @@ static void app_main_display(void)
     lv_label_set_text(label, LV_SYMBOL_BELL" Hello world Espressif and LVGL "LV_SYMBOL_BELL"\n "LV_SYMBOL_WARNING" For simplier initialization, use BSP "LV_SYMBOL_WARNING);
 }
 
+#if ENABLE_LV_LOG
+void my_log_cb(lv_log_level_t level, const char * buf)
+{
+  ESP_LOGI("LVGL", "%s", buf);
+}
+#endif
+
 void app_main(void)
 {
     ESP_ERROR_CHECK(weather_wifi_init());
 
-    esp_err_t ret = weather_wifi_connect(WIFI_SSID_R, WIFI_PASSWORD_R);
+    esp_err_t ret = weather_wifi_connect(WIFI_SSID, WIFI_PASSWORD);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to connect to Wi-Fi network");
     }
@@ -298,11 +311,10 @@ void app_main(void)
     ESP_ERROR_CHECK(app_lcd_init());
     // ESP_ERROR_CHECK(app_touch_init());
     ESP_ERROR_CHECK(app_lvgl_init());
-    
-    /* Show LVGL objects */
-    lvgl_port_lock(0);
-    app_main_display();
-    lvgl_port_unlock();
+
+    // Initialize the screen manager
+    screen_manager_init();
+    screen_manager_show(SCREEN_HOME);
 
     aht20_dev_handle_t aht20 = i2c_sensor_ath20_init();
     uint32_t temperature_raw;
@@ -310,35 +322,63 @@ void app_main(void)
     uint32_t humidity_raw;
     float humidity;
 
+    wifi_ap_record_t ap_info;
     double outside_temp, outside_humidity;
 
-    wifi_ap_record_t ap_info;
-    uint32_t one_hour_counter = 0;
-
+    uint32_t one_hour_counter = 3600, one_day_counter = 0;
     bool warning_wifi = false, warning_i2c = false;
+
+    uint64_t current_time_ms = 0, current_date; // current time in ms since midnight
+
+    #if ENABLE_LV_LOG
+    lvgl_port_lock(0);
+    lv_log_register_print_cb(my_log_cb);
+    lvgl_port_unlock();
+    #endif
+
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        one_hour_counter++;
+        one_hour_counter++; // value in seconds
+        one_day_counter++;  // -||-
 
         ret = aht20_read_temperature_humidity(aht20, &temperature_raw, &temperature, &humidity_raw, &humidity);
         if(ret != ESP_OK) warning_i2c = true;
         else warning_i2c = false;
-        // ESP_LOGI("AHT20 READ", "Temperature: %.2f C, Humidity: %.2f %%", temperature, humidity);
+        ESP_LOGI("AHT20 READ", "Temperature: %.2f C, Humidity: %.2f %%", temperature, humidity);
 
         if(one_hour_counter >= 3600) {
+            // Call openweathermap api for current weather data
+
             ret = esp_wifi_sta_get_ap_info(&ap_info);
             if (ret == ESP_OK) {
                 one_hour_counter = 0;
                 get_current_weather_data();
 
+                // Outside temp and humidity
                 get_temp_humidity(&outside_temp, &outside_humidity);
-                // ESP_LOGI(TAG, "Outside Temperature: %.2f C, Humidity: %.2f %%", outside_temp, outside_humidity);
+                ESP_LOGI(TAG, "Outside Temperature: %.2f C, Humidity: %.2f %%", outside_temp, outside_humidity);
+
+                // TODO: get current weather (sunny/rain/snow etc.)
             }
             else {
                 ESP_LOGE(TAG, "Failed to get AP info: %s", esp_err_to_name(ret));
                 warning_wifi = true; // Set warning flag to display on wifi error
                 one_hour_counter = 3540; // Retry in 1 minute
             }
+        }
+
+        if(one_day_counter >= 86400) {
+            one_day_counter = 0;
+            // TODO: All of these
+            // Call timezoneDB api for current time and date
+
+            // current_time_ms = ...
+            // current_date = ...
+
+            // current_time_ms gets refreshed to acurate time every day
+            // in the meantime, update the current_time_ms with one_day_counter
+
+            // Parse day/night
         }
     }
 }

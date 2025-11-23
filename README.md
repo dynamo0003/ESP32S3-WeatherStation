@@ -27,3 +27,12 @@ Alongside that, the chip already offers wifi with very minimal setup, so its per
     Also note hard limit of max 60 calls / min
     ```
     
+### TODO:
+- v1.0:
+    - Finish backend (call TimeZoneDB and parse time and date)
+    - Connect data recieved by backend to ui
+    - Model and print the case
+
+- v1.1:
+    - Make the weather forecast screen
+    - Upgrade backend to fetch 5 day weather forecast data
